@@ -1,0 +1,62 @@
+# Select one named profile below. Add a new profile to screen another condition.
+active_disease: "huntington"
+
+query:
+  organism: "Homo sapiens"
+  retmax: 500
+  batch_size: 100
+
+screen:
+  min_case_samples: 20
+  min_control_samples: 20
+  require_paired_end: true
+  require_all_runs_paired: true
+  # A mixed disease/control study is retained only when every usable biological sample is classified.
+  require_complete_phenotype: true
+  # Words are applied to concatenated GSM title, source, and characteristics.
+  control_patterns: ["\\bcontrol\\b", "healthy", "non.dement", "cognitively normal", "normal brain"]
+  exclude_patterns: ["single.cell", "single nucleus", "snrna", "scrna", "10x", "smart.seq", "cell line", "organoid", "ipsc"]
+  # Studies that merely mention these terms are flagged instead of excluded; inspect them manually.
+  review_patterns: ["laser.capture", "sorted", "microdissect", "pooled", "technical replicate"]
+  # Ordered from more-specific to broader anatomical labels. Each GSM keeps all
+  # matches in tissue_labels and the first matching label as tissue_primary.
+  tissue_patterns:
+    prefrontal_cortex: ["\\bpfcx?\\b", "prefrontal cortex", "dorsolateral prefrontal", "dlpfc", "brodmann area (9|10|46)"]
+    temporal_cortex: ["temporal cortex", "superior temporal", "middle temporal"]
+    entorhinal_cortex: ["entorhinal"]
+    hippocampus: ["hippocamp"]
+    cerebellum: ["cerebell"]
+    amygdala: ["amygdala"]
+    other_brain: ["\\bbrain\\b", "\\bcortex\\b", "frontal lobe", "parietal", "occipital", "caudate", "putamen", "striat"]
+    blood: ["whole blood", "\\bblood\\b", "pbmc", "peripheral blood", "serum", "plasma"]
+    csf: ["cerebrospinal fluid", "\\bcsf\\b"]
+    fibroblast: ["fibroblast"]
+
+# Profile-level values overlay the shared query/screen settings above. The supplied
+# labels are discovery aids: validate disease state and control status manually.
+diseases:
+  alzheimer:
+    label: "Alzheimer disease"
+    query_term: '"Alzheimer Disease"[All Fields]'
+    case_patterns: ["alzheimer", "ad\\b", "late.onset alzheimer", "braak"]
+  huntington:
+    label: "Huntington disease"
+    query_term: '"Huntington Disease"[All Fields]'
+    case_patterns: ["huntington", "huntington's", "\\bhd\\b", "cag repeat"]
+  parkinson:
+    label: "Parkinson disease"
+    query_term: '"Parkinson Disease"[All Fields]'
+    case_patterns: ["parkinson", "parkinson's", "\\bpd\\b", "lewy body"]
+
+ncbi:
+  email: "moises.rojas@cinv.cl"
+  tool: "geo_sra_discovery"
+  api_key_env: "NCBI_API_KEY"  # optional; never put a key in this file
+  sra_timeout_seconds: 60       # bound one SRA E-utilities request
+  sra_retry_attempts: 3
+  sra_search_retmax: 10000      # rentrez/SRA is unreliable with retmax=100000
+  # Query SRA only for studies passing case/control, bulk-keyword, and phenotype gates.
+  # Set false only when auditing SRA linkage for every discovered GSE.
+  sra_pre_screen_only: true
+
+output_dir: "outputs"
