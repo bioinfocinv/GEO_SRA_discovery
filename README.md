@@ -31,6 +31,16 @@ Rscript scripts/recover_sra_validation.R alzheimer
 
 This reuses the GSM screening result and retrieves GEO relations/SRA RunInfo only for studies passing the non-SRA gates. It overwrites the SRA-derived tables and recalculates `study_screening.csv`.
 
+### Auditing GEO supplementary counts and metadata
+
+The main discovery and recovery workflows audit every discovered GSE by default. To repeat the check independently—without downloading data—run:
+
+```bash
+Rscript scripts/audit_geo_supplementary.R alzheimer
+```
+
+It writes `geo_supplementary_files.csv` and adds availability columns to `study_screening.csv`: `has_count_like_file`, `has_ncbi_named_count_file`, `has_metadata_like_file`, and `count_like_filenames`. `has_ncbi_named_count_file` is strict: it recognizes GEO's NCBI-generated pattern `*_raw_counts_<assembly>_NCBI.tsv.gz` (for example, `GSE105041_raw_counts_GRCh38.p13_NCBI.tsv.gz`). Set `supplementary_audit.pre_screen_only: true` to inspect only pre-screened candidates on future runs; that is faster but leaves availability fields as `NA` for all other GSEs. Add `all` to override that setting in an independent audit, for example `Rscript scripts/audit_geo_supplementary.R alzheimer all`.
+
 ## What it queries
 
 1. NCBI E-utilities searches the **GEO DataSets** (`gds`) database for the configured disease, organism, and high-throughput expression profiling term. It uses `ESearch` + `ESummary` to obtain candidate GSEs. The configured NCBI email and tool name are sent explicitly with every request (rather than relying on `rentrez` global setters).
@@ -61,8 +71,8 @@ NCBI documents E-utilities as its programmatic interface and recommends identify
 | `gsm_phenotype_audit.csv` | GSM | raw phenotype text, inferred phenotype, tissue labels/evidence, matching-pattern evidence, modality and review flags |
 | `sra_runs.csv` | SRR | GSE/SRP/SRX/SRS/SRR IDs, layout, assay, platform, instrument, SRA release/load dates, sequencing center |
 | `sra_query_failures.csv` | GSE | SRA search/fetch/parse failures after automatic retries; rerun or inspect these GSEs manually |
+| `geo_supplementary_files.csv` | GSE × file | public GEO supplementary-file index and transparent count/metadata filename flags |
 | `fetch_sra_manifest.csv` | GSM joined to SRR | reviewable input to `fetch_SRA`; do not download rows until the crosswalk is verified |
-| `discovery_bundle.rds` | whole run | tables, exact config, and R session information |
 
 ## Validation
 

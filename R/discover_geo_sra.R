@@ -227,6 +227,10 @@ run_discovery <- function(config_path = "config/discovery.yml", disease_id = NUL
   write_csv(sra_failures, file.path(cfg$output_dir, "sra_query_failures.csv"))
   write_csv(run_table, file.path(cfg$output_dir, "fetch_sra_manifest.csv"))
   write_yaml(cfg, file.path(cfg$output_dir, "discovery_config_used.yml"))
+  if (isTRUE(cfg$supplementary_audit$enabled)) {
+    message("GEO supplementary audit: running for configured study scope")
+    study_table <- audit_geo_supplements(config_path, disease_id = disease_id, all_studies = !isTRUE(cfg$supplementary_audit$pre_screen_only))
+  }
   #saveRDS(list(studies = study_table, gsms = gsms, runs = runs, config = cfg, session = sessionInfo()), file.path(cfg$output_dir, "discovery_bundle.rds"))
   invisible(study_table)
 }
@@ -263,6 +267,90 @@ run_sra_validation_from_previous <- function(config_path = "config/discovery.yml
   write_csv(run_table, file.path(cfg$output_dir, "fetch_sra_manifest.csv"))
   write_csv(sra_failures, file.path(cfg$output_dir, "sra_query_failures.csv"))
   write_yaml(cfg, file.path(cfg$output_dir, "discovery_config_used.yml"))
+  if (isTRUE(cfg$supplementary_audit$enabled)) {
+    message("GEO supplementary audit: running for configured study scope")
+    study_table <- audit_geo_supplements(config_path, disease_id = disease_id, all_studies = !isTRUE(cfg$supplementary_audit$pre_screen_only))
+  }
   #saveRDS(list(studies = study_table, gsms = gsms, runs = runs, config = cfg, session = sessionInfo()), file.path(cfg$output_dir, "discovery_bundle.rds"))
   invisible(study_table)
+}
+
+geo_supplement_url <- function(gse) {
+  bucket <- str_replace(gse, "^(GSE[0-9]{3})[0-9]+$", "\\1nnn")
+  sprintf("https://ftp.ncbi.nlm.nih.gov/geo/series/%s/%s/suppl/", bucket, gse)
+}
+
+# Inspect the public GEO supplementary-file index only; this does not download
+# data files. Filename classifications are deliberately evidence labels, not
+# assertions of count provenance.
+geo_supplementary_files <- function(gse, timeout_seconds = 30) {
+  url <- geo_supplement_url(gse)
+  response <- tryCatch(httr::GET(url, httr::timeout(timeout_seconds)), error = function(e) e)
+  if (inherits(response, "error")) return(tibble(gse = gse, supplementary_url = url, filename = NA_character_, supplement_status = "request_failed", supplement_error = conditionMessage(response)))
+  if (httr::status_code(response) == 404) return(tibble(gse = gse, supplementary_url = url, filename = NA_character_, supplement_status = "no_supplement_directory", supplement_error = NA_character_))
+  if (httr::status_code(response) >= 400) return(tibble(gse = gse, supplementary_url = url, filename = NA_character_, supplement_status = paste0("http_", httr::status_code(response)), supplement_error = NA_character_))
+  page <- tryCatch(xml2::read_html(httr::content(response, as = "text", encoding = "UTF-8")), error = function(e) e)
+  if (inherits(page, "error")) return(tibble(gse = gse, supplementary_url = url, filename = NA_character_, supplement_status = "index_parse_failed", supplement_error = conditionMessage(page)))
+  files <- rvest::html_attr(rvest::html_elements(page, "a"), "href")
+  files <- files[!is.na(files) & !str_detect(files, "/") & files != ""]
+  if (!length(files)) return(tibble(gse = gse, supplementary_url = url, filename = NA_character_, supplement_status = "no_supplement_files", supplement_error = NA_character_))
+  lower <- str_to_lower(files)
+  tibble(gse = gse, supplementary_url = url, filename = files, supplement_status = "ok", supplement_error = NA_character_) |> mutate(
+    file_url = paste0(supplementary_url, filename),
+    count_like_file = str_detect(lower, "count|readcount|rawcount|htseq|featurecounts|gene.?matrix"),
+    # GEO's NCBI-generated RNA-seq table convention, e.g.
+    # GSE105041_raw_counts_GRCh38.p13_NCBI.tsv.gz. Do not classify a
+    # submitter-provided featureCounts table as NCBI-generated.
+    ncbi_named_count_file = str_detect(lower, "_raw_counts(?:_[a-z0-9.]+)?_ncbi\\.tsv(?:\\.gz)?$"),
+    metadata_like_file = str_detect(lower, "meta|sample|clinical|phenotype|annotation|sdrf|series.matrix"),
+    raw_sequence_file = str_detect(lower, "\\.(fastq|fq|sra)(\\.gz)?$")
+  )
+}
+
+# NCBI-generated count tables are served by GEO's rnaseq_counts endpoint and
+# are not reliably listed in the FTP supplementary directory.
+geo_ncbi_generated_counts <- function(gse, filename_templates, timeout_seconds = 30) {
+  templates <- filename_templates %||% "{gse}_raw_counts_GRCh38.p13_NCBI.tsv.gz"
+  filenames <- str_replace_all(templates, fixed("{gse}"), gse)
+  map_dfr(filenames, function(filename) {
+    url <- paste0("https://www.ncbi.nlm.nih.gov/geo/download/?type=rnaseq_counts&acc=", utils::URLencode(gse, reserved = TRUE), "&format=file&file=", utils::URLencode(filename, reserved = TRUE))
+    response <- tryCatch(httr::HEAD(url, httr::timeout(timeout_seconds)), error = function(e) e)
+    if (inherits(response, "error")) return(tibble(gse = gse, ncbi_generated_count_filename = filename, ncbi_generated_count_url = url, ncbi_count_status = "request_failed", ncbi_count_error = conditionMessage(response), ncbi_generated_count_available = NA))
+    status <- httr::status_code(response)
+    tibble(gse = gse, ncbi_generated_count_filename = filename, ncbi_generated_count_url = url,
+      ncbi_count_status = as.character(status), ncbi_count_error = NA_character_,
+      ncbi_generated_count_available = status == 200)
+  })
+}
+
+audit_geo_supplements <- function(config_path = "config/discovery.yml", disease_id = NULL, all_studies = FALSE) {
+  cfg <- read_yaml(config_path)
+  if (!is.null(disease_id)) cfg$active_disease <- disease_id
+  cfg <- resolve_config(cfg)
+  screen_path <- file.path(cfg$output_dir, "study_screening.csv")
+  if (!file.exists(screen_path)) stop("Run GEO discovery first; missing ", screen_path)
+  studies <- read_csv(screen_path, show_col_types = FALSE)
+  targets <- if (all_studies || !isTRUE(cfg$supplementary_audit$pre_screen_only)) studies else studies |> filter(pass_groups, pass_bulk, pass_phenotype)
+  message(sprintf("GEO supplementary audit: %d GSEs", nrow(targets)))
+  files <- map_dfr(targets$gse, geo_supplementary_files, timeout_seconds = cfg$supplementary_audit$timeout_seconds %||% 30)
+  generated_counts <- map_dfr(targets$gse, geo_ncbi_generated_counts,
+    filename_templates = cfg$supplementary_audit$ncbi_count_filename_templates,
+    timeout_seconds = cfg$supplementary_audit$timeout_seconds %||% 30)
+  summary <- files |> group_by(gse) |> summarise(
+    supplement_status = first_nonempty(supplement_status),
+    has_supplement_files = any(!is.na(filename)),
+    has_count_like_file = any(count_like_file, na.rm = TRUE),
+    has_metadata_like_file = any(metadata_like_file, na.rm = TRUE),
+    has_raw_sequence_file = any(raw_sequence_file, na.rm = TRUE),
+    count_like_filenames = str_c(filename[count_like_file %in% TRUE], collapse = ";"),
+    .groups = "drop") |> mutate(count_like_filenames = na_if(count_like_filenames, ""))
+  generated_summary <- generated_counts |> group_by(gse) |> summarise(
+    has_ncbi_named_count_file = case_when(any(ncbi_generated_count_available %in% TRUE) ~ TRUE, all(ncbi_count_status == "404") ~ FALSE, TRUE ~ NA),
+    ncbi_generated_count_filenames = str_c(ncbi_generated_count_filename[ncbi_generated_count_available %in% TRUE], collapse = ";"),
+    ncbi_generated_count_status = str_c(unique(ncbi_count_status), collapse = ";"), .groups = "drop") |> mutate(ncbi_generated_count_filenames = na_if(ncbi_generated_count_filenames, ""))
+  studies <- studies |> left_join(summary, by = "gse") |> left_join(generated_summary, by = "gse")
+  write_csv(files, file.path(cfg$output_dir, "geo_supplementary_files.csv"))
+  write_csv(generated_counts, file.path(cfg$output_dir, "geo_ncbi_generated_counts.csv"))
+  write_csv(studies, screen_path)
+  invisible(studies)
 }

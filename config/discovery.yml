@@ -59,4 +59,15 @@ ncbi:
   # Set false only when auditing SRA linkage for every discovered GSE.
   sra_pre_screen_only: true
 
+supplementary_audit:
+  enabled: true
+  timeout_seconds: 30
+  # GEO's NCBI-generated RNA-seq counts endpoint. Add templates when another
+  # reference assembly is required; {gse} is substituted automatically.
+  ncbi_count_filename_templates:
+    - "{gse}_raw_counts_GRCh38.p13_NCBI.tsv.gz"
+  # Audit every GSE during the main run. Set true to audit only pre-screened
+  # candidates (faster, but remaining studies will have NA availability fields).
+  pre_screen_only: false
+
 output_dir: "outputs"
