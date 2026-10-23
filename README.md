@@ -80,3 +80,9 @@ Before analysis, review each eligible GSE against its GEO record/publication and
 
 - Confirm tissue/brain region, species, bulk library preparation, and that no single-cell, sorted-cell, pooled, cell-line, or organoid samples enter the contrast.
 - Verify `case`/`control` from the study design, not just keyword matches; distinguish AD pathology, clinical AD, MCI, and other dementias. Explicitly mark exclusions and unresolved labels.
+
+## Author
+
+**Moises A. Rojas**
+
+Laboratory of Genomics and Evolution (MolEvol lab) @CINV July 2026
