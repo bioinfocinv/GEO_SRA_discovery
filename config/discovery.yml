@@ -47,6 +47,11 @@ diseases:
     label: "Parkinson disease"
     query_term: '"Parkinson Disease"[All Fields]'
     case_patterns: ["parkinson", "parkinson's", "\\bpd\\b", "lewy body"]
+  multiple_sclerosis:
+    label: "Multiple sclerosis"
+    query_term: '"Multiple Sclerosis"[All Fields]'
+    # Avoid bare "ms": it is ambiguous in GEO sample metadata.
+    case_patterns: ["multiple sclerosis", "relapsing.remitting", "\\brrms\\b", "secondary progressive", "\\bspms\\b", "primary progressive", "\\bppms\\b"]
 
 ncbi:
   email: "moises.rojas@cinv.cl"
