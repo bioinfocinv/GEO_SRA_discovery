@@ -336,6 +336,7 @@ audit_geo_supplements <- function(config_path = "config/discovery.yml", disease_
   generated_counts <- map_dfr(targets$gse, geo_ncbi_generated_counts,
     filename_templates = cfg$supplementary_audit$ncbi_count_filename_templates,
     timeout_seconds = cfg$supplementary_audit$timeout_seconds %||% 30)
+  for (column in c("count_like_file", "metadata_like_file", "raw_sequence_file")) { if (!column %in% names(files)) { files[[column]] <- FALSE } else { files[[column]][is.na(files[[column]])] <- FALSE } }
   summary <- files |> group_by(gse) |> summarise(
     supplement_status = first_nonempty(supplement_status),
     has_supplement_files = any(!is.na(filename)),
