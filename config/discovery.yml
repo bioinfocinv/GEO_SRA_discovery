@@ -7,8 +7,8 @@ query:
   batch_size: 100
 
 screen:
-  min_case_samples: 20
-  min_control_samples: 20
+  min_case_samples: 10
+  min_control_samples: 10
   require_paired_end: true
   require_all_runs_paired: true
   # A mixed disease/control study is retained only when every usable biological sample is classified.
@@ -52,6 +52,31 @@ diseases:
     query_term: '"Multiple Sclerosis"[All Fields]'
     # Avoid bare "ms": it is ambiguous in GEO sample metadata.
     case_patterns: ["multiple sclerosis", "relapsing.remitting", "\\brrms\\b", "secondary progressive", "\\bspms\\b", "primary progressive", "\\bppms\\b"]
+  frontotemporal_dementia:
+    label: "Frontotemporal dementia"
+    query_term: '"Frontotemporal Dementia"[All Fields]'
+    case_patterns:
+      - "frontotemporal dementia"
+      - "frontotemporal lobar degeneration"
+      - "\\bftd\\b"
+      - "\\bftld\\b"
+      - "behavio[u]?ral variant"
+      - "\\bbvftd\\b"
+      - "primary progressive aphasia"
+      - "\\bppa\\b"
+      - "semantic dementia"
+  stroke:
+    label: "Stroke"
+    query_term: '"Stroke"[All Fields]'
+    case_patterns:
+      - "\\bstroke\\b"
+      - "ischemic stroke"
+      - "cerebral infarct"
+      - "intracerebral hemorrhage"
+      - "haemorrhagic stroke"
+      - "hemorrhagic stroke"
+      - "middle cerebral artery occlusion"
+      - "\\bmcao\\b"
 
 ncbi:
   email: "moises.rojas@cinv.cl"
