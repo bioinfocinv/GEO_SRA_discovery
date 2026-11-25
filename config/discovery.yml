@@ -65,6 +65,19 @@ diseases:
       - "primary progressive aphasia"
       - "\\bppa\\b"
       - "semantic dementia"
+  als:
+    label: "Amyotrophic lateral sclerosis"
+    query_term: '("Amyotrophic Lateral Sclerosis"[All Fields] OR "Motor Neuron Disease"[All Fields])'
+    case_patterns:
+      - "amyotrophic lateral sclerosis"
+      - "\\bals\\b"
+      - "motor neuron disease"
+      - "\\bmnd\\b"
+      - "lou gehrig"
+      - "sporadic als"
+      - "familial als"
+      - "\\bsals\\b"
+      - "\\bfals\\b"
   stroke:
     label: "Stroke"
     query_term: '"Stroke"[All Fields]'
